@@ -1,15 +1,15 @@
-# Revokable branched outputs (Draft 2)
+# Revokable branched outputs
 
 ## Abstract
 While to this day Monero remains one of the top privacy coins in the
 cryptocurrency space it still lacks in several aspects, one important aspect
-that is drawing a lot of investment and development to other projects is smart
+that is drawing a lot of investment and development to other projects are smart
 contracts and scripting. While scripting as implemented in Ethereum and Bitcoin
 could not easily be implemented in Monero without heavily compromising the
 anonymity guarantees that Monero gives its users, increased interoperability or
-customizability of the behavior of outputs should still be sought after.
-Furthermore because of this lack of scripting time locked have so far only had very
-limited utility.
+customizability of the behavior of outputs should nevertheless be sought after.
+Furthermore because of this lack of scripting time locked transactions have so
+far only had limited utility.
 
 This proposal demonstrates a mechanism by which Monero
 transactions could gain more flexibility without compromising anonymity.
@@ -22,24 +22,25 @@ that Monero already uses so there would also be a diminished development cost.
   additional bytes)
 * every input MLSAG ring signature needs to also be signed by the private
   revocation key $s$ leading to the addition of the necessary ring signature
-  values $r_{i,3}$ ($32 * m$ additional bytes)
+  values $r_{i,3}$ ($32 * m$ additional bytes where $m$ is the amount of ring
+  members)
 * every input requires a revocation key image $\tilde K_r$ ($32$ additional
   bytes)
-* since $\tilde K_r$ are unique and themselves will prevent double spending the
-  normal key image $\tilde K$ of the one time address can be ommited ($32$ bytes
-  less)
+* since $\tilde K_r$ key images are unique they themselves can prevent double
+spending thus the normal key image $\tilde K$ of the one time address can be
+ommited ($32$ bytes less)
 
 ### 1.2 Modification to consensus rules
-* transactions outputs that reuse public revocation keys $sG$ are invalid
-* transaction inputs that reuse revocation key images $\tilde K_r$ are invalid
-* outputs may reuse the revocation key $sG$ if they commit to the same value and
+* transactions containing outputs that reuse public revocation keys $sG$ are invalid
+* transaction containing inputs that reuse revocation key images $\tilde K_r$ are invalid
+* outputs may reuse a revocation key $sG$ if they commit to the same value and
   are part of the same transaction
-* the sum of output commitments no longer have to add up to 0 as long as the
-  duplicate commitments use the same revocation key.
+* Instead of summing all output commitments to verify that no new Monero is
+  created just the root output commitments are added.
 
 ### 1.3 Modification of transaction construction
 * $t_r$ is the root output index, all outputs that share the same revocation
-  key $sG$ will also share the same $t_r$ output index
+  key $sG$ also share the same $t_r$ output index
 
 #### 1.3.1 Normal outputs
 By "normal" outputs single recipient outputs are meant
@@ -90,7 +91,7 @@ create the secret non-interactively as follows: $s = \mathcal H_n(rK^s_A)$
 ![](inheritance-tx-start.png)
 
 
-Now let's imagine Bob wants to use his money to pay for a smartphone:
+Now let's imagine Bob wants to use his Monero to pay for a smartphone:
 
 ![](inheritance-tx-end.png)
 
@@ -110,7 +111,7 @@ at the moment one could likely use an Ethereum smart contract as an
 intermediary since they are more flexible. For the purposes of demonstration
 the presented scenario will presume that Bitcoin has implemented
 a new opcode `OP_CHECK_ED25519_POINT` that takes a private and public EDCSA
-key and verifies that they belong to each other. In this scenario Bob has Bitcoin
+key pair and verifies that they belong to each other. In this scenario Bob has Bitcoin
 and wants Monero while Alice has Monero and wants Bitcoin.  The price is
 already agreed upon. The following diagram visualizes the protocol:
 
@@ -183,7 +184,6 @@ def encode_varint(x):
     data.append(x & 0x7f)
     return bytes(data)
 
-
 def b58encode(b: bytes) -> str:
     x = int.from_bytes(b, 'big')
     res = ''
@@ -216,7 +216,39 @@ def encode_branch_data(branches_data):
 This results in approx. $72 + 72 * m$ bytes where $m$ is the amount of
 addresses. For up to a few addresses this can still be stored in a QR-Code.
 The OpenAlias standard could be extended to permit another key value field by
-default so that one can create a more easily remembered alias.
+default so that one can create more easily remembered aliases for such
+transactions.
+
+## 5 Alternative approaches & future improvements
+
+### 5.1 Eliminating interactivity
+The current suggested mechanism requires an interactive setup between the
+recipients of a multi-recipient branching transaction. While it would be more
+favorable if the process were non-interactive it would require a
+cryptographic scheme not yet known to the author of this paper
+or a compromise to transaction size & privacy. If the sender has knowledge
+of $s$ he can determine when an output is spent by watching the blockchain
+for the revocation key image $\tilde K_r$.
+
+### 5.1.1 New cryptographic scheme
+The creator of a transaction must be able to create the public revocation key
+$sG$ from $K_1$, $K_2$, ... $K_n$ such that he cannot retrieve $s$, but anyone
+with a private $k_i$ corresponding to one of the public keys used for creation
+should be able to retrieve it. If you know of such a scheme feel free to comment
+on the corresponding issue [here](https://github.com/monero-project/research-lab/issues/74).
+
+### 5.1.2 Compromise to privacy
+The sender could randomly generate $s$ and encrypt it with the individual public
+keys of the recipients. This would not only require additional space in
+transactions it would also mean that senders have the ability to see when the
+outputs they created have been spent.
+
+### 5.2 Pruning of transaction data
+With the proposed mechanism where the revocation key is created from a
+secret shared by recipients all output branches belonging to the same root
+output would have the same commitment, commitment mask, encrypted amount and
+revocation key. Each branched output would only have to store the one time address of
+the recipient and an optional time lock.
 
 ## Conclusion
 While the addition of revocation keys would lead to an increase in transaction
